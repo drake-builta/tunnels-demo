@@ -22,10 +22,11 @@ def _():
     import marimo as mo
     import pandas as pd
     import altair as alt
+    from pyodide.http import pyxhr
 
     import configs
 
-    return alt, configs, io, mo, pd, requests
+    return alt, configs, io, mo, pd, pyxhr, requests
 
 
 @app.cell(hide_code=True)
@@ -37,8 +38,19 @@ def _(mo):
 
 
 @app.cell
-def _(configs, io, pd, requests):
-    _response = requests.get(configs.getInventoryDataPath())
+def _(configs, io, mo, pd, pyxhr, requests):
+    try:
+        _loc = mo.notebook_location()
+        if _loc:
+            _response = pyxhr.get(configs.getInventoryDataPath())
+            # Code specific to running in a WASM environment (browser-based)
+            # mo.md("This notebook is running in WASM!")
+    except:
+        _response = requests.get(configs.getInventoryDataPath())
+        # Code specific to running in a standard environment (with a Python backend)
+        # mo.md("This notebook is running with a Python backend.")
+
+
     _xml_content = _response.content.replace(b'\x00', b'')
 
     # Primary dataset (row per tunnel)
