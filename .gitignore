@@ -1,0 +1,9 @@
+# Ignore a specific file at the root of the repo
+/2025NTI.xlsx
+/configs.py
+/main.py
+/nti_2025.duckdb
+
+# Ignore all files in the 'temp' directory and its subdirectories
+__pycache__/**
+__marimo__/**

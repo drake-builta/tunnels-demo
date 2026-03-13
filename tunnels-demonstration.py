@@ -1,7 +1,11 @@
 import marimo
 
 __generated_with = "0.20.4"
-app = marimo.App(width="medium", auto_download=["ipynb"])
+app = marimo.App(
+    width="medium",
+    css_file="https://raw.githubusercontent.com/Haleshot/marimo-themes/refs/heads/main/themes/nord/nord.css",
+    auto_download=["ipynb"],
+)
 
 
 @app.cell(hide_code=True)
@@ -16,17 +20,11 @@ def _(mo):
 
 @app.cell
 def _():
-    import requests
-    import io
-
     import marimo as mo
     import pandas as pd
     import altair as alt
-    from pyodide.http import pyxhr
 
-    import configs
-
-    return alt, configs, io, mo, pd, pyxhr, requests
+    return alt, mo
 
 
 @app.cell(hide_code=True)
@@ -38,33 +36,46 @@ def _(mo):
 
 
 @app.cell
-def _(configs, io, mo, pd, pyxhr, requests):
-    try:
-        _loc = mo.notebook_location()
-        if _loc:
-            _response = pyxhr.get(configs.getInventoryDataPath())
-            # Code specific to running in a WASM environment (browser-based)
-            # mo.md("This notebook is running in WASM!")
-    except:
-        _response = requests.get(configs.getInventoryDataPath())
-        # Code specific to running in a standard environment (with a Python backend)
-        # mo.md("This notebook is running with a Python backend.")
+def _():
+    import duckdb
+
+    DATABASE_URL = "nti_2025.duckdb"
+    conn = duckdb.connect(DATABASE_URL, read_only=True)
+    return (conn,)
 
 
-    _xml_content = _response.content.replace(b'\x00', b'')
+@app.cell(hide_code=True)
+def _(conn):
+    df = conn.sql(f"""
+        SELECT 
+            tunnels.I1,
+            A1,
+            A2,
+            A4,
+            A5,
+            L1,
+            L2,
+            L3,
+            L4,
+            L5,
+            L6,
+            L7,
+            L8,
+            L9,
+            EN,
+            CS1::INTEGER AS CS1,
+            CS2::INTEGER AS CS2,
+            CS3::INTEGER AS CS3,
+            CS4::INTEGER AS CS4,
+            TOTALQTY::INTEGER AS TOTALQTY
 
-    # Primary dataset (row per tunnel)
-    df =     pd.read_xml(io.BytesIO(_xml_content), dtype="object", xpath="//TunnelInstance")
+        FROM tunnels
+            INNER JOIN elements
+            ON tunnels.I1 = elements.I1;
+        """).df()
 
-    # Secondary dataset (row per tunnel element)
-    df_els = pd.read_xml(io.BytesIO(_xml_content), dtype="object", xpath="//FHWAED")
-    return df, df_els
-
-
-@app.cell
-def _(df):
     df
-    return
+    return (df,)
 
 
 @app.cell(hide_code=True)
@@ -76,41 +87,14 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(df, df_els, pd):
+def _(df, mo):
     # Calculate element condition percentages
-    for i in list(range(1, 5, 1)):
-        i = str(i)
-        df_els['PCT_CS'+i] = df_els['CS'+i].astype(int) / df_els.TOTALQTY.astype(int)
+    df['PCT_CS1'] = df.CS1 / df.TOTALQTY
+    df['PCT_CS2'] = df.CS2 / df.TOTALQTY
+    df['PCT_CS3'] = df.CS3 / df.TOTALQTY
+    df['PCT_CS4'] = df.CS4 / df.TOTALQTY
 
-    # Prepare and merge the datasets on I1 (the unique identifier for each tunnel)
-    _cols = [
-        'I1',
-        'A1',
-        'A2',
-        'A4',
-        'A5',
-        'L1',
-        'L2',
-        'L3',
-        'L4',
-        'L5',
-        'L6',
-        'L7',
-        'L8',
-        'L9'
-    ]
-
-    def getMergedDataFrame():
-        df_merged = pd.merge(df_els, df[_cols], how="inner", on="I1")
-        return df_merged
-
-
-    return (getMergedDataFrame,)
-
-
-@app.cell(hide_code=True)
-def _(getMergedDataFrame, mo):
-    EN_options = getMergedDataFrame().EN.unique()
+    EN_options = df.EN.unique()
 
     # Create a form with multiple elements.
     # User must submit the form for a plot to be generated.
@@ -134,26 +118,26 @@ def _(getMergedDataFrame, mo):
 
 
 @app.cell(hide_code=True)
-def _(alt, form, getMergedDataFrame, mo):
-    _df = getMergedDataFrame()
+def _(alt, df, form, mo):
+    _df = df
 
     if (form.value != None):
         _df = _df[_df.EN.isin(form.value["elems"])].copy()
         fetched_ids = _df.I1
-    
+
         # Calculate the number of truck cycles experienced
         _df['RECENT_WORK'] = _df[['A1','A2']].max(axis=1).astype(int)
         _df['AGE']  = 2026 - _df.RECENT_WORK.astype(int)
         _df['ADTT'] = _df.A5.astype(int)
         _df['TRUCK_CYCLES'] = _df.ADTT * _df.AGE
-    
+
         # Aggregate the condition states
         _cols = []
         for _cond in (form.value["conds"]):
             _cols.append(f"PCT_CS{_cond}")
             _colname = " + ".join(_cols)
             _df[_colname] = _df[_cols].sum(axis=1)
-    
+
         fig1 = mo.ui.altair_chart(alt.Chart(_df).mark_point().encode(
             x='TRUCK_CYCLES',
             y=_colname,
@@ -163,21 +147,17 @@ def _(alt, form, getMergedDataFrame, mo):
 
 
 @app.cell(hide_code=True)
-def _(fig1, form, mo):
+def _(fig1, mo):
     # Display the plot
-
-    if (form.value != None):
+    try:
         mo.vstack([
             mo.md("### Reactive Scatterplot"),
             mo.md("Tip: *Select one or more data points in the chart to show these records in the table.*"),
             fig1, 
             mo.ui.table(fig1.value)
         ])
-    return
-
-
-@app.cell
-def _():
+    except:
+        mo.md("Please select one or more elements from the dropdown and click 'Submit' to view the chart.")
     return
 
 
