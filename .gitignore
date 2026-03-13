@@ -2,7 +2,6 @@
 /2025NTI.xlsx
 /configs.py
 /main.py
-/nti_2025.duckdb
 
 # Ignore all files in the 'temp' directory and its subdirectories
 __pycache__/**
