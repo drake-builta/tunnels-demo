@@ -6,4 +6,3 @@
 
 # Ignore all files in the 'temp' directory and its subdirectories
 __pycache__/**
-__marimo__/**
