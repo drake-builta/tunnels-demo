@@ -35,18 +35,11 @@ def _(mo):
     return
 
 
-@app.cell
-def _():
-    import duckdb
-
-    DATABASE_URL = "nti_2025.duckdb"
-    conn = duckdb.connect(DATABASE_URL, read_only=True)
-    return (conn,)
-
-
 @app.cell(hide_code=True)
-def _(conn):
-    df = conn.sql(f"""
+def _():
+    import duckdb as ddb
+
+    df = ddb.sql(f"""
         SELECT 
             tunnels.I1,
             A1,
@@ -69,8 +62,8 @@ def _(conn):
             CS4::INTEGER AS CS4,
             TOTALQTY::INTEGER AS TOTALQTY
 
-        FROM tunnels
-            INNER JOIN elements
+        FROM 'tunnels.csv'
+            INNER JOIN 'elements.csv'
             ON tunnels.I1 = elements.I1;
         """).df()
 
