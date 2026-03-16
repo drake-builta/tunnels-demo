@@ -55,7 +55,7 @@ def _():
             L7,
             L8,
             L9,
-            EN,
+            EN::VARCHAR AS EN,
             CS1::INTEGER AS CS1,
             CS2::INTEGER AS CS2,
             CS3::INTEGER AS CS3,
@@ -91,66 +91,97 @@ def _(df, mo):
 
     # Create a form with multiple elements.
     # User must submit the form for a plot to be generated.
-    form = (
-        mo.md('''
+
+
+    elems=mo.ui.multiselect(options=EN_options, label="Elements")
+    conds=mo.ui.range_slider(start=1, stop=4, step=1, label="Condition States")
+    mo.md(f'''
         **Select a combination of tunnel elements and condition states**
 
         {elems}
 
         {conds}
     ''')
-        .batch(
-            elems=mo.ui.multiselect(options=EN_options, label="Elements"),
-            conds=mo.ui.range_slider(start=1, stop=4, step=1, label="Condition States"),
-        )
-        .form(show_clear_button=True, bordered=True)
-    )
 
-    form
-    return (form,)
+
+
+    # form = (
+    #     mo.md('''
+    #     **Select a combination of tunnel elements and condition states**
+
+    #     {elems}
+
+    #     {conds}
+    # ''')
+    #     .batch(
+    #         elems=mo.ui.multiselect(options=EN_options, label="Elements"),
+    #         conds=mo.ui.range_slider(start=1, stop=4, step=1, label="Condition States"),
+    #     )
+    #     .form(show_clear_button=True, bordered=True)
+    # )
+
+    # form
+    return conds, elems
 
 
 @app.cell(hide_code=True)
-def _(alt, df, form, mo):
+def _(alt, conds, df, elems, mo):
+    # mo.stop(form.value is None, mo.md("Submit the form to continue"))
+
     _df = df
 
-    if (form.value != None):
-        _df = _df[_df.EN.isin(form.value["elems"])].copy()
-        fetched_ids = _df.I1
+    # if (form.value != None):
+    _df = _df[_df.EN.isin(elems.value)].copy()
+    fetched_ids = _df.I1
 
-        # Calculate the number of truck cycles experienced
-        _df['RECENT_WORK'] = _df[['A1','A2']].max(axis=1).astype(int)
-        _df['AGE']  = 2026 - _df.RECENT_WORK.astype(int)
-        _df['ADTT'] = _df.A5.astype(int)
-        _df['TRUCK_CYCLES'] = _df.ADTT * _df.AGE
+    # Calculate the number of truck cycles experienced
+    _df['RECENT_WORK'] = _df[['A1','A2']].max(axis=1).astype(int)
+    _df['AGE']  = 2026 - _df.RECENT_WORK.astype(int)
+    _df['ADTT'] = _df.A5.astype(int)
+    _df['TRUCK_CYCLES'] = _df.ADTT * _df.AGE
 
-        # Aggregate the condition states
-        _cols = []
-        for _cond in (form.value["conds"]):
-            _cols.append(f"PCT_CS{_cond}")
-            _colname = " + ".join(_cols)
-            _df[_colname] = _df[_cols].sum(axis=1)
+    # Aggregate the condition states
+    _cols = []
+    _cond_range = range(conds.value[0], conds.value[1] + 1)
+    for _cond in (_cond_range):
+        _cols.append(f"PCT_CS{_cond}")
+        _colname = " + ".join(_cols)
+        _df[_colname] = _df[_cols].sum(axis=1)
 
-        fig1 = mo.ui.altair_chart(alt.Chart(_df).mark_point().encode(
-            x='TRUCK_CYCLES',
-            y=_colname,
-            color='EN'
-        ))
+    fig1 = mo.ui.altair_chart(alt.Chart(_df).mark_point().encode(
+        x='TRUCK_CYCLES',
+        y=_colname,
+        color='EN'
+    ))
+
     return (fig1,)
 
 
 @app.cell(hide_code=True)
-def _(fig1, mo):
+def _(elems, fig1, mo):
+
     # Display the plot
-    try:
-        mo.vstack([
-            mo.md("### Reactive Scatterplot"),
-            mo.md("Tip: *Select one or more data points in the chart to show these records in the table.*"),
-            fig1, 
-            mo.ui.table(fig1.value)
-        ])
-    except:
-        mo.md("Please select one or more elements from the dropdown and click 'Submit' to view the chart.")
+
+    if (len(elems.value) > 0):
+        _fig = fig1
+        _tbl = mo.ui.table(_fig.value)
+    else:
+        _fig = mo.md("Select one or more elements in the dropdown above to view this chart.")
+        _tbl = mo.md("")
+
+    print(elems.value)
+
+    mo.vstack([
+        mo.md("### Reactive Scatterplot"),
+        _fig,
+        _tbl
+    ])
+
+    return
+
+
+@app.cell
+def _():
     return
 
 
