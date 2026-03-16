@@ -27,6 +27,13 @@ def _():
     return alt, mo
 
 
+@app.cell
+def _():
+    import warnings
+    warnings.filterwarnings('ignore')
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -159,9 +166,7 @@ def _(alt, conds, df, elems, mo):
 
 @app.cell(hide_code=True)
 def _(elems, fig1, mo):
-
     # Display the plot
-
     if (len(elems.value) > 0):
         _fig = fig1
         _tbl = mo.ui.table(_fig.value)
@@ -169,19 +174,12 @@ def _(elems, fig1, mo):
         _fig = mo.md("Select one or more elements in the dropdown above to view this chart.")
         _tbl = mo.md("")
 
-    print(elems.value)
-
     mo.vstack([
         mo.md("### Reactive Scatterplot"),
         _fig,
         _tbl
     ])
 
-    return
-
-
-@app.cell
-def _():
     return
 
 
